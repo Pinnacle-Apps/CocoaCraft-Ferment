@@ -32,6 +32,7 @@ class FermentationProfile(StrictModel):
     schema_version: Literal["1.0"] = "1.0"
     id: UUID = Field(default_factory=uuid4)
     org_id: UUID
+    supplier_id: UUID
     name: str = Field(min_length=1, max_length=160)
     status: Literal["draft", "approved", "archived"] = "draft"
     revision: int = Field(default=1, ge=1)
@@ -82,6 +83,9 @@ class FermentationBatch(StrictModel):
     schema_version: Literal["1.0"] = "1.0"
     id: UUID = Field(default_factory=uuid4)
     org_id: UUID
+    supplier_id: UUID
+    producer_lot_code: str = Field(min_length=1, max_length=160)
+    supplier_lot_review_id: UUID | None = None
     profile_id: UUID
     profile_revision: int = Field(ge=1)
     status: Literal["planned", "running", "completed", "held"] = "planned"
@@ -103,7 +107,7 @@ def temperature_assessment(profile: FermentationProfile, batch: FermentationBatc
     No target points means no automatic pass/fail decision. This is process
     monitoring, not a microbiological safety or product release determination.
     """
-    if profile.id != batch.profile_id or profile.org_id != batch.org_id or profile.revision != batch.profile_revision:
+    if profile.id != batch.profile_id or profile.org_id != batch.org_id or profile.supplier_id != batch.supplier_id or profile.revision != batch.profile_revision:
         raise ValueError("Batch must reference this organization, profile and revision")
     points = profile.temperature_envelope
     out = []
