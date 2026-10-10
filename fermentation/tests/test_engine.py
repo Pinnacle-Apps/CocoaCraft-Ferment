@@ -37,7 +37,7 @@ class FermentationEngineTests(unittest.TestCase):
 
     def test_missing_target_returns_unassessed(self):
         self.profile.temperature_envelope = []
-        batch = FermentationBatch(org_id=self.org, profile_id=self.profile.id,
+        batch = FermentationBatch(org_id=self.org, supplier_id=self.supplier, producer_lot_code='COOP-001', profile_id=self.profile.id,
                                   profile_revision=1, observations=[Observation(hour=20, pulp_ph=4, temperature_c=35)])
         self.assertEqual(temperature_assessment(self.profile, batch)[0]["status"], "unassessed")
 
