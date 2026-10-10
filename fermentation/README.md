@@ -26,3 +26,9 @@ The threshold checks are informational process monitoring only, **not** validate
 ## License and attribution
 
 The repository retains the upstream Artisan copyright notices and AGPL-3.0 terms. Newly added fermentation source files identify their license. See the repository root `LICENSE`.
+
+## Supplier-side local preview
+
+Open `fermentation/ui/index.html` in a browser to try the form-to-chart workflow without credentials, Supabase, or a deployment. All readings and events are kept in page memory; use **Export batch JSON** to retain an example record. This UI is strictly a preview, **not** an authenticated supplier portal, persisted record, calibration system, or production chart. The actual CocoaCraft supplier portal integration will require approved database migrations and server-side authorization before activation.
+
+`fermentation/monitoring.py` provides chart-ready data from validated profile and batch records; its tests are in `fermentation/tests/test_monitoring.py`.
