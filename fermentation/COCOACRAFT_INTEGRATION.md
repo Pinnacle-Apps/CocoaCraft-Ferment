@@ -1,39 +1,42 @@
-# CocoaCraft integration contract — draft v0.1
+# CocoaCraft Fermentation — supplier-first integration contract (draft v0.2)
 
-The public fermentation engine is an AGPL-3.0-or-later domain package. CocoaCraft (main application) remains the authoritative identity, organization, lot, production and supplier-quality system. This document is an integration proposal, not a deployed connector.
+**Phase 1 owner and UI:** CocoaCraft Supplier Module / Supplier Portal. Farmers, cooperatives and supplier users define fermentation profiles, log batches and submit evidence. **Do not insert fermentation controls into the maker production-run workflow.** Maker users may access approved supplier history only through authorized supplier-sharing and quality-review flows.
 
-## Existing CocoaCraft structures verified from `docs/supabase-schema-snapshot.sql`
+## Existing code verified
 
-- `orgs(id)`, `org_members(org_id,user_id,role)` with roles owner/admin/editor/viewer.
-- `ingredient_lots(id,org_id,ingredient_id,lot_code,supplier_quality_review_id)`.
-- `supplier_lot_reviews(id,org_id,ingredient_lot_id,supplier_id,...)`.
-- `production_plans(id,org_id,formulation_id,revision,status)`.
-- `production_plan_rows(id,production_plan_id,process_step_name,check_name,target_value,min_value,max_value,unit,record_type,required,is_user_modified,...)`.
-- `roast_profiles(id,org_id,status,...)`. Existing roast workflow should remain unchanged.
+- Supplier portal UI: `pages/supplier-portal/index.tsx`.
+- Authenticated portal context: `lib/supplier-quality/portal.ts` and `pages/api/supplier-portal/context.ts`.
+- Supplier lot endpoints: `pages/api/supplier-portal/lots/index.ts` and `[id].ts`.
+- `getSupplierPortalContext` verifies an **ACTIVE** `supplier_portal_memberships` record and resolves **both** `orgId` and `supplierId`. `supplierCanContribute` permits `ADMIN` and `CONTRIBUTOR` rather than viewers.
+- Existing schema snapshot SQL: `orgs`, `org_members`, `supplier_portal_memberships`, `suppliers`, `supplier_lot_reviews`, `supplier_quality_plans`, `supplier_lot_check_results`, `ingredient_lots`. `ingredient_lots` represents maker-side received inventory and is **not** required to begin supplier-side fermentation.
 
-The JSON snapshot was empty when fetched: use SQL snapshot as currently available structural evidence and repair snapshot generation separately before rollout.
+## Phase 1 ownership and lot lifecycle
 
-## Transport and authorization
+1. Supplier portal membership determines authorization, not a client-provided `org_id` or `supplier_id`.
+2. Every fermentation profile, version, batch, observation and event must have an enforced owner pair `(org_id, supplier_id)`. Resolve supplier membership against BOTH keys; enforce composite foreign keys through child records.
+3. Farm/cooperative producer lot code is recorded at batch creation. A supplier may have several fermentations within a later aggregated shipment lot. Preserve source-to-output lot associations rather than overwriting IDs.
+4. Link optional `supplier_lot_review_id` when the lot submission is created. Cross-check both supplier and organization on any attachment.
+5. `ingredient_lot_id` is **optional and downstream only**. Makers can see authorized, finalized history as supporting evidence within supplier quality or lot traceability, never unrestricted supplier work-in-progress.
+6. No automatic cross-organization visibility. Supplier sharing requires a separately reviewed, explicit access path: existing supplier portal membership does not itself grant any buyer unrestricted fermentation access.
 
-1. CocoaCraft user authenticates with the same Supabase Auth session used by the main application. Never trust `org_id` supplied by a client without resolving active organization membership on the server.
-2. Resolve `source_lot_id` to an ingredient lot (where available); verify the lot belongs to the same organization. Upstream farm batches may precede CocoaCraft inventory intake, so source-lot linking must be optional; persist a producer lot code and origin separately.
-3. Validate `profile_id` and `profile_revision` against a released version; snapshot the exact release for each execution.
-4. Pass production-plan checks into fermentation as a read-only set of requirements. On reconciliation never overwrite rows where `is_user_modified = true`; retain source IDs and stable deduplication keys.
-5. Record manual observations and future sensor readings under the same append-only event model; units and probe locations are explicit. Temperature envelopes are process targets, not food-safety limits.
-6. Use paginated event retrieval and server-side timestamps; enforce ingestion idempotency with externally supplied UUIDs.
+## Process data
 
-## Proposed database migration (main CocoaCraft repository only)
+- Approved profiles are immutable version snapshots; drafts are editable without recording every draft edit.
+- Batch observations and events are append-only operational history, including recording time, elapsed time, measurement source, probe position, units, operator, and correction/supersession linkage when needed.
+- Targets are process-specific temperature envelopes, not universal food-safety thresholds. pH can distinguish pulp and bean; events include turns, sampling, inspections, and deviations.
+- No direct sensor/cloud credentials in this public repository. CocoaCraft identity is validated server-side using its existing session handling.
 
-Five structures: `fermentation_profiles` (mutable drafts), `fermentation_profile_versions` (immutable approved snapshots), `fermentation_batches`, `fermentation_observations`, `fermentation_events`. Each table carries `org_id`, with org-membership-scoped RLS. Enforce cross-tenant parent linkage through composite foreign keys `(org_id,id)`; never rely solely on application checks.
+## Database work to prepare in main CocoaCraft only
 
-Approval produces one immutable revision; draft keystrokes do not generate audit records. Once released, create new revisions; never update or delete historical versions or actual events. Separately control service-side ingestion permissions. Do not create direct client write permissions to immutable records until a reviewed append-only policy and server authorization path exist.
+Five proposed structures: `fermentation_profiles`, `fermentation_profile_versions`, `fermentation_batches`, `fermentation_observations`, `fermentation_events`.
 
-Add migrations only under main CocoaCraft's `supabase/migrations/` and let its existing automated migration + schema snapshot pipeline apply them **only after review**. Do not commit a migration to a branch that can deploy automatically until workflow behavior is verified.
+- Include `org_id` and `supplier_id` in every table, plus scoped, immutable foreign keys to the owning entity where appropriate.
+- Validate ownership using `supplier_portal_memberships` with `status = 'ACTIVE'` for contributor writes, and read access according to the actual existing supplier portal roles and approved sharing policy.
+- Do **not** reuse maker production-plan rows as Phase 1 process requirements. Supplier-side process inspections belong to approved fermentation profile versions, with optional later alignment to `supplier_quality_plan_rows`/supplier lot checks.
+- Link supplier lot records by `(org_id, supplier_id, supplier_lot_review_id)` only when verified against schema keys and constraints. Do not force maker inventory linkage.
+- Migrations belong under main CocoaCraft `supabase/migrations/` following examination of `docs/supabase-schema-snapshot.json` and `.sql`. **Do not commit a migration triggering automatic production application before validation.**
+- Preserve full released-profile revision and actual batch history, without draft keystroke history.
 
-## Not yet implemented
+## Current limitations
 
-- Live OAuth/browser handoff and CocoaCraft navigation
-- RLS migration and tables in production
-- Bidirectional API persistence and lot synchronization
-- Approved profile version lifecycle and permissioned release actions
-- Sensor ingestion, calibration, and operator acceptance workflows
+This document is the integration contract only. The Ferment package contains transport models and temperature-envelope assessment, **not** a live supplier API, UI, schema migration, verified end-to-end access, or deployment. The main repository's JSON snapshot returned empty on the last inspection; SQL snapshot was reviewed.
