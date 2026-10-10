@@ -13,8 +13,9 @@ from fermentation.engine import (
 class FermentationEngineTests(unittest.TestCase):
     def setUp(self):
         self.org = uuid4()
+        self.supplier = uuid4()
         self.profile = FermentationProfile(
-            org_id=self.org, name="Cooperative box trial", batch_mass_kg=400,
+            org_id=self.org, supplier_id=self.supplier, name="Cooperative box trial", batch_mass_kg=400,
             duration_hours=120, status="approved",
             temperature_envelope=[
                 TargetPoint(hour=0, minimum_c=25, maximum_c=32),
@@ -25,7 +26,7 @@ class FermentationEngineTests(unittest.TestCase):
 
     def test_interpolated_envelope(self):
         batch = FermentationBatch(
-            org_id=self.org, profile_id=self.profile.id, profile_revision=1,
+            org_id=self.org, supplier_id=self.supplier, producer_lot_code='COOP-001', profile_id=self.profile.id, profile_revision=1,
             observations=[Observation(hour=30, temperature_c=36),
                           Observation(hour=90, temperature_c=52)],
             events=[ProcessEvent(hour=48, kind="turn")],
@@ -41,7 +42,7 @@ class FermentationEngineTests(unittest.TestCase):
         self.assertEqual(temperature_assessment(self.profile, batch)[0]["status"], "unassessed")
 
     def test_revision_and_tenant_mismatch_rejected(self):
-        batch = FermentationBatch(org_id=uuid4(), profile_id=self.profile.id,
+        batch = FermentationBatch(org_id=uuid4(), supplier_id=self.supplier, producer_lot_code='COOP-001', profile_id=self.profile.id,
                                   profile_revision=1)
         with self.assertRaises(ValueError):
             temperature_assessment(self.profile, batch)
@@ -52,7 +53,7 @@ class FermentationEngineTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             TargetPoint(hour=5, minimum_c=55, maximum_c=35)
         with self.assertRaises(ValidationError):
-            FermentationProfile(org_id=self.org, name="invalid", batch_mass_kg=50,
+            FermentationProfile(org_id=self.org, supplier_id=self.supplier, name="invalid", batch_mass_kg=50,
                                 duration_hours=72, temperature_envelope=[
                                     TargetPoint(hour=24, minimum_c=30, maximum_c=40),
                                     TargetPoint(hour=12, minimum_c=30, maximum_c=40),
